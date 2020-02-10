@@ -55,9 +55,9 @@ Read data from sql server (local) using RODBC library
 ```{r}
 #local_conn = odbcConnect("local")
 #claim_database <- sqlQuery(local_conn,"SELECT * from lbb_algoritma.dbo.view_claim")
-#write.csv(claim_database, "claim/data/claim.csv", sep = "|", row.names = FALSE, quote = FALSE)
+#write.csv(claim_database, "data/claim.csv", sep = "|", row.names = FALSE, quote = FALSE)
 
-claim <- read_csv("claim/data/claim.csv", quote = "|")
+claim <- read_csv("data/claim.csv", quote = "|")
 ```
 
 Check if data loaded successfuly and assigned to object
