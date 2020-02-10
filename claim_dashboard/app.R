@@ -51,7 +51,7 @@ sidebar <- dashboardSidebar(
     width = 300,
     sidebarMenu(
         menuItem("Year on Year", tabName = "yearonyears", icon = icon("signal")),
-        #menuItem("Claim Profile", tabName = "claimprofiles", icon = icon("cog")),
+        menuItem("Claim Profile", tabName = "claimprofiles", icon = icon("cog")),
         #menuItem("Spreading", tabName = "spreading", icon = icon("globe")),
         menuItem("SLA Performance", tabName = "slaperformances", icon = icon("align-center")),
         menuItem("What If Analysis", tabName = "whatifanalysis", icon = icon("question"))
@@ -120,6 +120,55 @@ body <- dashboardBody(
                                 selected = c(unique(claim$region)))                    
                 )            
         ),
+        tabItem(tabName = "claimprofiles",
+                tabBox(
+                    width = 9,
+                    id = "tabset6",
+                    tabPanel("Claim Number by Status",
+                             plotlyOutput(
+                                 outputId = "plot43"
+                             )
+                    ),
+                    tabPanel("Claim Amount by Status",
+                             plotlyOutput(
+                                 outputId = "plot44"
+                             ) 
+                    ),                    
+                    tabPanel("Claim Number by Type",
+                             plotOutput(
+                                 outputId = "plot41"
+                             )
+                    ),
+                    tabPanel("Claim Amount by Type",
+                             plotOutput(
+                                 outputId = "plot42"
+                             )                            
+                    )
+                ),                
+                box(
+                    width = 3,
+                    title = "Data Filters",
+                    dateRangeInput(inputId = "registerdate4", 
+                                   label = "Register Date",
+                                   start = min(claim$register_date), end = max(claim$register_date)),
+                    pickerInput("claimtype4", "Claim Type", 
+                                choices=c(unique(claim$claim_type)), 
+                                options = list(`actions-box` = TRUE), 
+                                multiple = T, 
+                                selected = c(unique(claim$claim_type))),
+                    pickerInput("category4", "Category", 
+                                choices=c(unique(claim$category)), 
+                                options = list(`actions-box` = TRUE), 
+                                multiple = T, 
+                                selected = c(unique(claim$category))),
+                    pickerInput("region4", "Region", 
+                                choices=c(unique(claim$region)), 
+                                options = list(`actions-box` = TRUE), 
+                                multiple = T, 
+                                selected = c(unique(claim$region)))                    
+                )
+             
+        ),        
         tabItem(tabName = "slaperformances",
                 height = 20,
                 tabBox(
@@ -166,7 +215,7 @@ body <- dashboardBody(
                 height = 20,
                 tabBox(
                     width = 9,
-                    title = tagList(shiny::icon("question"), "What If Analysis"),
+                    title = tagList(shiny::icon("question"), "What If Analysis (Dynamic SLA Simulation)"),
                     id = "tabset3",
                     tabPanel(textOutput("sla_x_value"),
                              fluidRow(
@@ -325,6 +374,173 @@ server <- function(input, output) {
             layout(showlegend = FALSE)
         
     })
+    #---------------------------------------------------------------------------------------------------------------------
+    
+    #---- Claim Profile --------------------------------------------------------------------------------------------------
+    observe({
+        print(input$claimtype4)
+        print(input$category4)
+        print(input$region4)
+    })
+    
+    output$plot41 <- renderPlot({
+        
+        claim_number_by_claim_type <-  claim %>% 
+            filter( register_date >= input$registerdate4[1], register_date <= input$registerdate4[2],
+                    claim_type %in% c(input$claimtype4),
+                    category %in% c(input$category4),
+                    region %in% c(input$region4)) %>%             
+            group_by(claim_type) %>% 
+            summarise(total_claim_number = n()) %>% 
+            ungroup() %>% 
+            mutate(text = glue(
+                "Claim Typw:  {claim_type}
+                Total Claim Number: {total_claim_number}"
+            ))
+        
+        # Compute percentages
+        claim_number_by_claim_type$fraction = claim_number_by_claim_type$total_claim_number /
+            sum(claim_number_by_claim_type$total_claim_number)
+        
+        # Compute the cumulative percentages (top of each rectangle)
+        claim_number_by_claim_type$ymax = cumsum(claim_number_by_claim_type$fraction)
+        
+        # Compute the bottom of each rectangle
+        claim_number_by_claim_type$ymin = c(0, head(claim_number_by_claim_type$ymax, n=-1))
+        
+        # Compute label position
+        claim_number_by_claim_type$labelPosition <- (claim_number_by_claim_type$ymax + claim_number_by_claim_type$ymin) / 2
+        
+        # Compute a good label
+        claim_number_by_claim_type$label <- paste0(claim_number_by_claim_type$claim_type, "\n value: ",
+                                                   comma(claim_number_by_claim_type$total_claim_number, accuracy = NULL))
+        
+        plot_claim_number_by_claim_type <- ggplot(data = claim_number_by_claim_type, aes(ymax=ymax, ymin=ymin, xmax=4, xmin=3, fill=claim_type)) +
+            geom_rect() +
+            coord_polar(theta="y") +
+            xlim(c(2, 4)) +
+            theme_minimal() +
+            theme(axis.text.x = element_text(angle = 0, hjust = 1)) +
+            geom_rect() +
+            geom_label( x=3.5, aes(y=labelPosition, label=label), size=4) +
+            scale_fill_brewer(palette=3) +
+            coord_polar(theta="y") +
+            xlim(c(2, 4)) +
+            theme_void() +
+            theme(legend.position = "none") +  
+            labs(y = "Total Claim Number",
+                 x = "Claim Type")
+        
+        plot_claim_number_by_claim_type
+        
+    })
+    
+    output$plot42 <- renderPlot({
+        claim_amount_by_claim_type <-  claim %>% 
+            filter( register_date >= input$registerdate4[1], register_date <= input$registerdate4[2],
+                    claim_type %in% c(input$claimtype4),
+                    category %in% c(input$category4),
+                    region %in% c(input$region4)) %>%                         
+            group_by(claim_type) %>% 
+            summarise(total_claim_amount = sum(claim_amount)) %>% 
+            ungroup() %>% 
+            mutate(text = glue(
+                "Claim Typw:  {claim_type}
+                Total Claim Amount: {total_claim_amount}"
+            ))
+        
+        # Compute percentages
+        claim_amount_by_claim_type$fraction = claim_amount_by_claim_type$total_claim_amount /
+            sum(claim_amount_by_claim_type$total_claim_amount)
+        
+        # Compute the cumulative percentages (top of each rectangle)
+        claim_amount_by_claim_type$ymax = cumsum(claim_amount_by_claim_type$fraction)
+        
+        # Compute the bottom of each rectangle
+        claim_amount_by_claim_type$ymin = c(0, head(claim_amount_by_claim_type$ymax, n=-1))
+        
+        # Compute label position
+        claim_amount_by_claim_type$labelPosition <- (claim_amount_by_claim_type$ymax + claim_amount_by_claim_type$ymin) / 2
+        
+        # Compute a good label
+        claim_amount_by_claim_type$label <- paste0(claim_amount_by_claim_type$claim_type, "\n value: ",
+                                                   comma(claim_amount_by_claim_type$total_claim_amount, accuracy = NULL))
+        
+        plot_claim_amount_by_claim_type <- ggplot(data = claim_amount_by_claim_type, aes(ymax=ymax, ymin=ymin, xmax=4, xmin=3, fill=claim_type)) +
+            geom_rect() +
+            coord_polar(theta="y") +
+            xlim(c(2, 4)) +
+            theme_minimal() +
+            theme(axis.text.x = element_text(angle = 0, hjust = 1)) +
+            geom_rect() +
+            geom_label( x=3.5, aes(y=labelPosition, label=label), size=4) +
+            scale_fill_brewer(palette=3) +
+            coord_polar(theta="y") +
+            xlim(c(2, 4)) +
+            theme_void() +
+            theme(legend.position = "none") +  
+            labs(y = "Total Claim Amount",
+                 x = "Claim Type")
+        
+        plot_claim_amount_by_claim_type
+        
+    })
+    
+    output$plot43 <- renderPlotly({
+        claim_number_by_claim_status <-  claim %>% 
+            filter( register_date >= input$registerdate4[1], register_date <= input$registerdate4[2],
+                    claim_type %in% c(input$claimtype4),
+                    category %in% c(input$category4),
+                    region %in% c(input$region4)) %>%                         
+            group_by(claim_status) %>% 
+            summarise(total_claim_number = n()) %>% 
+            ungroup() %>% 
+            mutate(text = glue(
+                "Claim Type:  {claim_status}
+                Total Claim Number: {comma(total_claim_number, accuracy = NULL)}"
+            ))
+        
+        plot_claim_number_by_claim_status <- 
+            ggplot(data = claim_number_by_claim_status, aes(x = claim_status, 
+                                                            y = total_claim_number, 
+                                                            text = text)) +
+            geom_col(aes(fill = claim_status), position = "dodge", show.legend = F)+
+            labs(y = "Total Claim Number",
+                 x = "Claim Status") +
+            theme_minimal()  
+        
+        ggplotly(plot_claim_number_by_claim_status, tooltip = "text")
+        
+    })
+    
+    output$plot44 <- renderPlotly({
+        claim_amount_by_claim_status <-  claim %>% 
+            filter( register_date >= input$registerdate4[1], register_date <= input$registerdate4[2],
+                    claim_type %in% c(input$claimtype4),
+                    category %in% c(input$category4),
+                    region %in% c(input$region4)) %>%                         
+            group_by(claim_status) %>% 
+            summarise(total_claim_amount = sum(claim_amount)) %>% 
+            ungroup() %>% 
+            mutate(text = glue(
+                "Claim Type:  {claim_status}
+                Total Claim Amount: {comma(total_claim_amount, accuracy = NULL)}"
+            ))
+        
+        plot_claim_amount_by_claim_status <- 
+            ggplot(data = claim_amount_by_claim_status, aes(x = claim_status, 
+                                                            y = total_claim_amount, 
+                                                            text = text)) +
+            geom_col(aes(fill = claim_status), position = "dodge", show.legend = F)+
+            labs(y = "Total Claim Amount",
+                 x = "Claim Status") +
+            scale_y_continuous(labels = unit_format(unit = "M", scale = 1e-6))+
+            theme_minimal()  
+        
+        ggplotly(plot_claim_amount_by_claim_status, tooltip = "text")
+        
+    })
+    
     #---------------------------------------------------------------------------------------------------------------------
     
     #---- SLA Performance ------------------------------------------------------------------------------------------------

@@ -1,0 +1,10 @@
+name: Publish Document
+title:
+username:
+account: rpubs
+server: rpubs.com
+hostUrl: rpubs.com
+appId: https://api.rpubs.com/api/v1/document/573235/d3b207c9a2c5428ba38dfe76697f753d
+bundleId: https://api.rpubs.com/api/v1/document/573235/d3b207c9a2c5428ba38dfe76697f753d
+url: http://rpubs.com/imansubarkah/573235
+when: 1581365583.93774
