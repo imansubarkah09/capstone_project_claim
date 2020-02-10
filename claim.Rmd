@@ -1,0 +1,728 @@
+---
+title: "Capstone Project - Claim Insurance"
+author: "Iman Subarkah"
+date: "`r format(Sys.Date(), '%B %e, %Y')`"
+output: 
+  html_document:
+    theme: flatly
+    higlight: tango
+    toc: true
+    toc_float:
+      collapsed: false
+    number_sections: true
+    df_print: paged
+---
+
+# Intro
+We are an insurance company that join with another financial technology company as business to business, we covered life and health our partner customer. Our partner challenged us to decrease our SLA of claim process and we have to got this challenged.
+
+# Libraries and Setup
+
+Preparing Rmarkdown Document
+```{r}
+# clear-up the environment
+rm(list = ls())
+
+# chunk options
+knitr::opts_chunk$set(
+  message = FALSE,
+  warning = FALSE,
+  fig.align = "center",
+  comment = "#>"
+)
+
+# scientific notation
+options(scipen = 9999)
+```
+
+```{r setup, include=FALSE}
+library(RODBC)
+library(readr)
+library(lubridate)
+library(formattable)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(scales)
+
+library(glue)
+library(plotly)
+```
+
+# Datasets
+Data already  stored in our SQL Server 
+Read data from sql server (local) using RODBC library
+```{r}
+#local_conn = odbcConnect("local")
+#claim_database <- sqlQuery(local_conn,"SELECT * from lbb_algoritma.dbo.view_claim")
+#write.csv(claim_database, "claim/data/claim.csv", sep = "|", row.names = FALSE, quote = FALSE)
+
+claim <- read_csv("claim/data/claim.csv", quote = "|")
+```
+
+Check if data loaded successfuly and assigned to object
+```{r}
+head(claim)
+```
+Discover Data Structure
+```{r}
+glimpse(claim)
+```
+
+Variable descriptions:
+
+- `id`: Running number atau nomor urut
+- `id_klaim`: Id transaksi klaim
+- `id_peserta`: Id unique peserta
+- `start_date`: Tanggal mulai peserta dalam asuransi
+- `end_date`: Tanggal selesai peserta dalam asuransi
+- `date_of_birth`: Tanggal lahir peserta
+- `currency`: Mata uang
+- `sum_insured`: Uang pertanggungan
+- `participant_status`: Status kepesertaan asuransi
+- `sales_room_city_external`: Kota pada saat peserta membeli asuransi
+- `region`: Klasifikasi berdasarkan kota domisili peserta
+- `category`: Klasifikasi berdasarkan media penjualan asuransi
+- `claim_type`: Tipe klaim
+- `event_date`: Tanggal Kejadian
+- `register_date`: Tanggal pengajuan klaim
+- `complete_doc_date`: Tanggal kelengkapan dokumen klaim
+- `verify_date`: Tanggal klaim diverifikasi
+- `decision_date`: Tanggal klaim diputuskan untuk disetujui atau ditolak
+- `payment_date`: Tanggal klaim dibayar
+- `claim_status`: Status klaim
+- `claim_amount`: Jumlah klaim yang diajukan
+- `paid_amount`: Jumlah klaim yang dibayar
+- `reject_reason`: Alasan klaim ditolak
+- `aging_register_to_complete_doc`: Selisih hari dari tanggal pengajuan klaim ke tanggal dokumen lengkap
+- `aging_complete_doc_to_verify`: Selisih hari dari tanggal dokumen lengkap ke tanggal verifikasi klaim
+- `aging_verify_to_decision`: Selisih hari dari tanggal verifikasi klaim ke tanggal decision
+- `aging_complete_doc_to_decision`: Selisih hari dari tanggal dokumen lengkap ke tanggal decision
+- `aging_decision_to_payment`: Selisih hari dari tanggal decision ke tanggal klaim dibayar
+- `aging_register_to_payment`: Selisih hari dari tanggal pengajuan klaim ke tanggal klaim dibayar
+- `aging_complete_doc_to_payment`: Selisih hari dari tanggal dokumen lengkap ke tanggal klaim dibayar
+- `sla_register_to_complete_doc`: Sla dari tanggal pengajuan klaim ke tanggal dokumen lengkap
+- `sla_complete_doc_to_verify`: Sla dari tanggal dokumen lengkap ke tanggal verifikasi klaim
+- `sla_verify_to_decision`: Sla dari tanggal verifikasi klaim ke tanggal decision
+- `sla_complete_doc_to_decision`: Sla dari tanggal dokumen lengkap ke tanggal decision
+- `sla_decision_to_payment`: Sla dari tanggal decision ke tanggal klaim dibayar
+- `sla_register_to_payment`: Sla dari tanggal pengajuan klaim ke tanggal klaim dibayar
+- `sla_complete_doc_to_payment`: Sla dari tanggal dokumen lengkap ke tanggal klaim dibayar
+- `status_sla_register_to_complete_doc`: Meet SLA/Below Expectation untuk tanggal pengajuan klaim ke tanggal dokumen lengkap
+- `status_sla_complete_doc_to_verify`: Meet SLA/Below Expectation untuk tanggal dokumen lengkap ke tanggal verifikasi klaim
+- `status_sla_verify_to_decision`: Meet SLA/Below Expectation untuk tanggal verifikasi klaim ke tanggal decision
+- `status_sla_complete_doc_to_decision`: Meet SLA/Below Expectation untuk tanggal dokumen lengkap ke tanggal decision
+- `status_sla_decision_to_payment`: Meet SLA/Below Expectation untuk tanggal decision ke tanggal klaim dibayar
+- `status_sla_register_to_payment`: Meet SLA/Below Expectation untuk tanggal pengajuan klaim ke tanggal klaim dibayar
+- `status_sla_complete_doc_to_payment`: Meet SLA/Below Expectation untuk tanggal dokumen lengkap ke tanggal klaim dibayar
+- `meet_sla_register_to_complete_doc`: Jika Meet SLA = 1, Below Expectation = 0 untuk selisih tanggal pengajuan klaim ke tanggal dokumen lengkap
+- `below_sla_register_to_complete_doc`: Jika Below Expectation = 1, Meet SLA = 0 untuk selisih tanggal pengajuan klaim ke tanggal dokumen lengkap
+- `meet_sla_complete_doc_to_payment`: Jika Meet SLA = 1, Below Expectation = 0 untuk selisih tanggal dokumen lengkap ke tanggal klaim dibayar
+- `below_sla_complete_doc_to_payment`: Jika Below Expectation = 1, Meet SLA = 0 untuk selisih tanggal dokumen lengkap ke tanggal klaim dibayar
+- `meet_sla_complete_doc_to_decision`: Jika Meet SLA = 1, Below Expectation = 0 untuk selisih tanggal dokumen lengkap ke tanggal decision
+- `below_sla_complete_doc_to_decision`: Jika Below Expectation = 1, Meet SLA = 0 untuk selisih tanggal dokumen lengkap ke tanggal decision
+- `meet_sla_decision_to_payment`: Jika Meet SLA = 1, Below Expectation = 0 untuk selisih tanggal decision ke tanggal klaim dibayar
+- `below_sla_decision_to_payment`: Jika Below Expectation = 1, Meet SLA = 0 untuk selisih tanggal decision ke tanggal klaim dibayar
+
+Checking some missing value
+```{r}
+claim_data <- claim %>% 
+  is.na() %>% 
+  colSums() 
+
+claim_data
+```
+
+# Set the theme
+```{r}
+theme_iman <- theme(legend.key = element_rect(fill="black"),
+           legend.background = element_rect(color="white", fill="#263238"),
+           plot.subtitle = element_text(size=6, color="white"),
+           panel.background = element_rect(fill="#dddddd"),
+           panel.border = element_rect(fill=NA),
+           panel.grid.minor.x = element_blank(),
+           panel.grid.major.x = element_blank(),
+           panel.grid.major.y = element_line(color="darkgrey", linetype=2),
+           panel.grid.minor.y = element_blank(),
+           plot.background = element_rect(fill="#263238"),
+           text = element_text(color="white"),
+           axis.text = element_text(color="white"),
+           legend.position='none')
+```
+
+# Subsetting and Plotting
+## Preparing additional value
+```{r}
+claim$Y_register_date <- lubridate::year(claim$register_date)
+claim$M_register_date <- lubridate::month(claim$register_date, label = T, abbr = T)
+claim$m_register_date <- lubridate::month(claim$register_date)
+claim$YYYY_mm_register_date <- format(as.Date(claim$register_date, "%Y-%m-%d"), "%Y-%m")
+claim$MM_YYYY_register_date <- paste(claim$M_register_date, claim$Y_register_date, sep="-")
+claim$YQ_register_date <- lubridate::quarter(claim$register_date, with_year = TRUE)
+```
+
+
+# Capstone Project
+## Year On Year Claim Number
+### Subsetting
+```{r}
+yoy_by_claim_number <-  claim %>% 
+  group_by(Y_register_date, M_register_date) %>% 
+  summarise(total_claim_number = n()) %>% 
+  ungroup() %>% 
+  mutate(text = glue(
+    "Register Date:  {M_register_date} - {Y_register_date}
+     Total Claim Number: {total_claim_number}"
+  ))
+
+yoy_by_claim_number
+
+```
+
+### Ploting
+```{r}
+plot_yoy_by_claim_number <- ggplot(data = yoy_by_claim_number, 
+                                  aes(fill=M_register_date, 
+                                      y=total_claim_number, 
+                                      x=interaction(Y_register_date, M_register_date))) +
+  geom_segment(aes(x=interaction(Y_register_date, M_register_date), 
+                   xend=interaction(Y_register_date, M_register_date), 
+                   y=0, 
+                   yend=total_claim_number), 
+               color="grey")+
+  geom_point(aes(col = M_register_date, size = 4, text = text)) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  ggtitle("Year on Year by Claim Number") +
+  labs(y = "Total Claim Number",
+       x = "Year & Month of Register Date")
+
+ggplotly(plot_yoy_by_claim_number, tooltip = "text") %>% 
+  config(displaylogo = F) %>% 
+  layout(showlegend = FALSE)
+
+```
+
+## Year On Year Claim Amount
+### Subsetting
+```{r}
+yoy_by_claim_amount <-  claim %>% 
+  group_by(Y_register_date, M_register_date) %>% 
+  summarise(total_claim_amount = sum(claim_amount)) %>% 
+  ungroup() %>% 
+  mutate(text = glue(
+    "Register Date:  {M_register_date} - {Y_register_date}
+     Total Claim Amount: {total_claim_amount}"
+  ))
+
+yoy_by_claim_amount
+
+```
+
+### Ploting
+```{r}
+plot_yoy_by_claim_amount <- ggplot(data = yoy_by_claim_amount, 
+                                  aes(fill=M_register_date, 
+                                      y=total_claim_amount, 
+                                      x=interaction(Y_register_date, M_register_date))) +
+  geom_segment(aes(x=interaction(Y_register_date, M_register_date), 
+                   xend=interaction(Y_register_date, M_register_date), 
+                   y=0, 
+                   yend=total_claim_amount), 
+               color="grey")+
+  geom_point(aes(col = M_register_date, size = 4, text = text)) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  scale_y_continuous(labels = unit_format(unit = "M", scale = 1e-6)) +
+  ggtitle("Year on Year by Claim Amount") +
+  labs(y = "Total Claim Amount",
+       x = "Year & Month of Register Date")
+
+ggplotly(plot_yoy_by_claim_amount, tooltip = "text") %>% 
+  config(displaylogo = F) %>% 
+  layout(showlegend = FALSE)
+
+```
+
+## SLA Performance
+### Subsetting
+```{r}
+claim_sla_complete_doc_to_payment <- 
+  claim %>% 
+  filter(claim_status == "Paid") %>% 
+  group_by(
+            YYYY_mm_register_date, 
+            status_sla_complete_doc_to_payment) %>% 
+  summarise(
+            count_status_sla_complete_doc_to_payment = 
+            sum(meet_sla_complete_doc_to_payment)+
+            sum(below_sla_complete_doc_to_payment)) %>%
+  ungroup() %>% 
+  mutate(count_status = ifelse(status_sla_complete_doc_to_payment == "Meet SLA",
+                                 count_status_sla_complete_doc_to_payment,
+                                 -1*count_status_sla_complete_doc_to_payment)) %>%   
+  arrange(desc(YYYY_mm_register_date)) %>%
+  mutate(text = glue(
+    "SLA Status: {status_sla_complete_doc_to_payment}
+     Register Date:  {YYYY_mm_register_date}
+     Claim Number: {count_status_sla_complete_doc_to_payment}"
+  ))
+```
+
+### Ploting
+```{r}
+breaks_values <- pretty(claim_sla_complete_doc_to_payment$count_status)
+
+plot_claim_sla_complete_doc_to_payment <- ggplot(data = claim_sla_complete_doc_to_payment, 
+                                  aes(x = YYYY_mm_register_date, 
+                                      y = count_status, 
+                                      fill = status_sla_complete_doc_to_payment))+
+  geom_hline(yintercept = 0)+
+  geom_bar(stat = "identity")+
+  geom_point(aes(text = text)) +
+  coord_flip()+
+  scale_y_continuous(breaks = breaks_values,
+                     labels = abs(breaks_values))+
+  theme_minimal() +
+  ggtitle("SLA Performance") +
+  labs(y = "SLA Status",
+       x = "Year & Month of Register Date")
+
+ggplotly(plot_claim_sla_complete_doc_to_payment, tooltip = "text") %>% 
+  config(displaylogo = F) %>% 
+  layout(showlegend = F)
+```
+
+## What If Analysis
+### Subseting
+```{r}
+#karena data di bawah Juli 2018 menggunakan SLA 14 hari maka data difilter hanya untuk yang menggunakan SLA 7 hari yaitu klaim dengan tanggal pengajuan di atas Juni 2018
+
+SLA_x <- 2 #parameter input SLA ini silahkan diganti-ganti, jika ingin tahu bagaimana SLA performance jika SLA diturunkan
+
+claim_sla_x <- 
+  claim %>% 
+    filter(claim_status == "Paid", register_date >= "2018-07-01") %>%
+    mutate( 
+            status_sla_complete_doc_to_payment_new = 
+            case_when(aging_complete_doc_to_payment > SLA_x ~ "Below Expectation",
+            TRUE ~ "Meet SLA")) %>% 
+    select( 
+            YYYY_mm_register_date,
+            status_sla_complete_doc_to_payment_new)
+
+claim_sla_x_ready <- 
+  claim_sla_x %>% 
+    mutate(
+            meet_sla_complete_doc_to_payment_new = 
+            case_when(status_sla_complete_doc_to_payment_new != 'Meet SLA' ~ 0, TRUE ~ 1),
+            below_sla_complete_doc_to_payment_new = 
+            case_when(status_sla_complete_doc_to_payment_new != 'Below Expectation' ~ 0, TRUE ~ 1)
+    )
+
+claim_sla_complete_doc_to_payment_x <- 
+  claim_sla_x_ready %>%
+  group_by(
+            YYYY_mm_register_date, 
+            status_sla_complete_doc_to_payment_new) %>% 
+  summarise(
+            count_status_sla_complete_doc_to_payment_new = 
+            sum(meet_sla_complete_doc_to_payment_new)+
+            sum(below_sla_complete_doc_to_payment_new)) %>% 
+  ungroup() %>% 
+  mutate(count_status = ifelse(status_sla_complete_doc_to_payment_new == "Meet SLA",
+                                 count_status_sla_complete_doc_to_payment_new,
+                                 -1*count_status_sla_complete_doc_to_payment_new)) %>%   
+  arrange(desc(YYYY_mm_register_date)) %>%
+  mutate(text = glue(
+    "SLA Status: {status_sla_complete_doc_to_payment_new}
+     Register Date: {YYYY_mm_register_date}
+     Claim Number: {count_status_sla_complete_doc_to_payment_new}"
+  ))  
+```
+
+
+### Ploting
+```{r}
+
+```
+
+
+
+## Claim Number by Claim Type
+Our partner want to see how many claim number based on claim type
+### Subseting
+```{r}
+claim_number_by_type <- 
+  claim %>% 
+  group_by(claim_type, YQ_register_date) %>% 
+  summarise(total_claim_number = n()) %>% 
+  ungroup() %>% 
+  mutate(text = glue(
+    "Claim Type: {claim_type}
+     Year & Quarter: {YQ_register_date}
+     Total Claim Number: {total_claim_number}"
+  ))
+```
+
+### Plotting
+```{r}
+plot_claim_number_by_claim_type <- ggplot(data = claim_number_by_type, aes(x = YQ_register_date,
+                         y = total_claim_number)) +
+  geom_point(aes(color = claim_type, text = text), show.legend = F) +
+  geom_line(aes(color = claim_type), show.legend = F)+
+  labs(title = "Trend Total Claim Number Based on Claim Type",
+       y = "Total Claim Number",
+       x = "Quarter & Year Register Date") +
+  theme_iman
+
+ggplotly(plot_claim_number_by_claim_type, tooltip = "text") %>% 
+  config(displaylogo = F)
+```
+
+## Claim Amount by Claim Type
+Our partner want to see how many claim amount based on claim type
+### Subseting
+```{r}
+claim_amount_by_type <- 
+  claim %>% 
+  group_by(claim_type, YQ_register_date) %>% 
+  summarise(total_claim_amount = sum(claim_amount)) %>% 
+  ungroup() %>% 
+  mutate(text = glue(
+    "Claim Type: {claim_type}
+     Year & Quarter: {YQ_register_date}
+     Total Claim Amount: {total_claim_amount}"
+  ))  
+```
+
+### Plotting
+```{r}
+plot_claim_amount_by_claim_type <- ggplot(data = claim_amount_by_type, aes(x = YQ_register_date,
+                         y = total_claim_amount)) +
+  geom_point(aes(color = claim_type, text = text), show.legend = F) +
+  geom_line(aes(color = claim_type), show.legend = F)+
+  labs(title = "Trend Total Claim Amount Based on Claim Type",
+       y = "Total Claim Amount",
+       x = "Quarter & Year Register Date") +
+  scale_y_continuous(labels = unit_format(unit = "M", scale = 1e-6))+
+  theme_iman
+
+ggplotly(plot_claim_amount_by_claim_type, tooltip = "text") %>% 
+  config(displaylogo = F)
+```
+
+## Claim Number by Claim Status
+Our partner want to see how many claim number based on claim status
+### Subseting
+```{r}
+claim_number_by_status <- 
+  claim %>% 
+  group_by(claim_status, Y_register_date) %>% 
+  summarise(total_claim_number = n()) %>% 
+  ungroup() %>% 
+  mutate(text = glue(
+    "Claim Status: {claim_status}
+     Year: {Y_register_date}
+     Total Claim Number: {total_claim_number}"
+  ))
+```
+
+### Plotting
+```{r}
+plot_claim_number_by_claim_status <- 
+  ggplot(data = claim_number_by_status, aes(x = Y_register_date, 
+                                            y = total_claim_number, 
+                                            text = text)) +
+  geom_col(aes(fill = claim_status), position = "dodge", show.legend = F)+
+  labs(title = "Trend Total Claim Number Based on Claim Status",
+       y = "Total Claim Number",
+       x = "Year Register Date") +
+  theme_iman  
+
+ggplotly(plot_claim_number_by_claim_status, tooltip = "text")
+```
+
+## Claim Amount by Claim Status
+Our partner want to see how many claim amount based on claim status
+### Subseting
+```{r}
+claim_amount_by_status <- 
+  claim %>% 
+  group_by(claim_status, Y_register_date) %>% 
+  summarise(total_claim_amount = sum(claim_amount)) %>% 
+  ungroup() %>% 
+  mutate(text = glue(
+    "Claim Status: {claim_status}
+     Year: {Y_register_date}
+     Total Claim Amount: {total_claim_amount}"
+  ))
+```
+
+### Plotting
+```{r}
+plot_claim_amount_by_claim_status <- 
+  ggplot(data = claim_amount_by_status, aes(x = Y_register_date, 
+                                            y = total_claim_amount, 
+                                            text = text)) +
+  geom_col(aes(fill = claim_status), position = "dodge", show.legend = F)+
+  labs(title = "Trend Total Claim Amount Based on Claim Status",
+       y = "Total Claim Amount",
+       x = "Year Register Date") +
+  scale_y_continuous(labels = unit_format(unit = "M", scale = 1e-6))+
+  theme_iman  
+
+ggplotly(plot_claim_amount_by_claim_status, tooltip = "text")
+```
+
+## Claim Number by Region
+Our partner want to see how many claim number based on region
+### Subseting
+```{r}
+claim_number_by_region <- 
+  claim %>% 
+  group_by(region, YQ_register_date) %>% 
+  summarise(total_claim_number = n()) %>% 
+  ungroup() %>% 
+  mutate(text = glue(
+    "Region: {region}
+     Year & Quarter: {YQ_register_date}
+     Total Claim Number: {total_claim_number}"
+  ))
+```
+
+### Plotting
+```{r}
+plot_claim_number_by_region <- ggplot(data = claim_number_by_region, aes(x = YQ_register_date,
+                         y = total_claim_number)) +
+  geom_point(aes(color = region, text = text), show.legend = F) +
+  geom_line(aes(color = region), show.legend = F)+
+  labs(title = "Trend Total Claim Number Based on Region",
+       y = "Total Claim Number",
+       x = "Quarter & Year Register Date") +
+  theme_iman
+
+ggplotly(plot_claim_number_by_region, tooltip = "text") %>% 
+  config(displaylogo = F)
+```
+
+## Claim Amount by Region
+Our partner want to see how many claim amount based on region
+### Subseting
+```{r}
+claim_amount_by_region <- 
+  claim %>% 
+  group_by(region, YQ_register_date) %>% 
+  summarise(total_claim_amount = sum(claim_amount)) %>% 
+  ungroup() %>% 
+  mutate(text = glue(
+    "Region: {region}
+     Year & Quarter: {YQ_register_date}
+     Total Claim Amount: {total_claim_amount}"
+  ))
+```
+
+### Plotting
+```{r}
+plot_claim_amount_by_region <- ggplot(data = claim_amount_by_region, aes(x = YQ_register_date,
+                         y = total_claim_amount)) +
+  geom_point(aes(color = region, text = text), show.legend = F) +
+  geom_line(aes(color = region), show.legend = F)+
+  labs(title = "Trend Total Claim Amount Based on Region",
+       y = "Total Claim Amount",
+       x = "Quarter & Year Register Date") +
+  scale_y_continuous(labels = unit_format(unit = "M", scale = 1e-6))+
+  theme_iman
+
+ggplotly(plot_claim_amount_by_region, tooltip = "text") %>% 
+  config(displaylogo = F)
+```
+
+## Claim Number by Category
+Our partner want to see how many claim number based on category
+### Subseting
+```{r}
+claim_number_by_category <- 
+  claim %>% 
+  group_by(category, YQ_register_date) %>% 
+  summarise(total_claim_number = n()) %>% 
+  ungroup() %>% 
+  mutate(text = glue(
+    "Category: {category}
+     Year & Quarter: {YQ_register_date}
+     Total Claim Number: {total_claim_number}"
+  ))
+```
+
+### Plotting
+```{r}
+plot_claim_number_by_category <- ggplot(data = claim_number_by_category, aes(x = YQ_register_date,
+                         y = total_claim_number)) +
+  geom_point(aes(color = category, text = text), show.legend = F) +
+  geom_line(aes(color = category), show.legend = F)+
+  labs(title = "Trend Total Claim Number Based on Category",
+       y = "Total Claim Number",
+       x = "Quarter & Year Register Date") +
+  theme_iman
+
+ggplotly(plot_claim_number_by_category, tooltip = "text") %>% 
+  config(displaylogo = F)
+```
+
+## Claim Amount by Category
+Our partner want to see how many claim amount based on category
+### Subseting
+```{r}
+claim_amount_by_category <- 
+  claim %>% 
+  group_by(category, YQ_register_date) %>% 
+  summarise(total_claim_amount = sum(claim_amount)) %>% 
+  ungroup() %>% 
+  mutate(text = glue(
+    "Category: {category}
+     Year & Quarter: {YQ_register_date}
+     Total Claim Amount: {total_claim_amount}"
+  ))
+```
+
+
+### Plotting
+```{r}
+plot_claim_amount_by_category <- ggplot(data = claim_amount_by_category, aes(x = YQ_register_date,
+                         y = total_claim_amount)) +
+  geom_point(aes(color = category, text = text), show.legend = F) +
+  geom_line(aes(color = category), show.legend = F)+
+  labs(title = "Trend Total Claim Amount Based on Category",
+       y = "Total Claim Amount",
+       x = "Quarter & Year Register Date") +
+  scale_y_continuous(labels = unit_format(unit = "M", scale = 1e-6))+
+  theme_iman
+
+ggplotly(plot_claim_amount_by_category, tooltip = "text") %>% 
+  config(displaylogo = F)
+```
+
+
+## Claim SLA Performance
+### Subseting
+```{r}
+claim_sla_complete_doc_to_payment <- 
+  claim %>% 
+  filter(claim_status == "Paid") %>% 
+  group_by(
+            YYYY_mm_register_date, 
+            status_sla_complete_doc_to_payment) %>% 
+  summarise(
+            count_status_sla_complete_doc_to_payment = 
+            sum(meet_sla_complete_doc_to_payment)+
+            sum(below_sla_complete_doc_to_payment)) %>% 
+  ungroup() %>% 
+  arrange(desc(YYYY_mm_register_date)) %>% 
+  mutate(text = glue(
+    "SLA Status: {status_sla_complete_doc_to_payment}
+     Register Date: {YYYY_mm_register_date}
+     Total Claim Number: {count_status_sla_complete_doc_to_payment}"
+  ))  
+```
+
+### Plotting
+```{r}
+plot_claim_sla_complete_doc_to_payment <- 
+  ggplot(data = claim_sla_complete_doc_to_payment,
+         aes( x = YYYY_mm_register_date, 
+              y = count_status_sla_complete_doc_to_payment, 
+              text = text)) +
+  geom_col(aes(fill = status_sla_complete_doc_to_payment), position = "fill", show.legend = F)+
+  labs(title = "SLA Performance - Complete Doc to Payment",
+       y = "Claim Number",
+       x = "Register Date")+
+  coord_flip()+
+  theme_iman  
+
+ggplotly(plot_claim_sla_complete_doc_to_payment, tooltip = "text")
+```
+
+## Claim SLA Performance "What If Analysis"
+### Subseting
+```{r}
+#karena data di bawah Juli 2018 menggunakan SLA 14 hari maka data difilter hanya untuk yang menggunakan SLA 7 hari yaitu klaim dengan tanggal pengajuan di atas Juni 2018
+
+SLA_x <- 2 #parameter input SLA ini silahkan diganti-ganti, jika ingin tahu bagaimana SLA performance jika SLA diturunkan
+
+claim_sla_x <- 
+  claim %>% 
+    filter(claim_status == "Paid", register_date >= "2018-07-01") %>%
+    mutate( 
+            status_sla_complete_doc_to_payment_new = 
+            case_when(aging_complete_doc_to_payment > SLA_x ~ "Below Expectation",
+            TRUE ~ "Meet SLA")) %>% 
+    select( 
+            YYYY_mm_register_date,
+            status_sla_complete_doc_to_payment_new)
+
+claim_sla_x_ready <- 
+  claim_sla_x %>% 
+    mutate(
+            meet_sla_complete_doc_to_payment_new = 
+            case_when(status_sla_complete_doc_to_payment_new != 'Meet SLA' ~ 0, TRUE ~ 1),
+            below_sla_complete_doc_to_payment_new = 
+            case_when(status_sla_complete_doc_to_payment_new != 'Below Expectation' ~ 0, TRUE ~ 1)
+    )
+
+claim_sla_complete_doc_to_payment_x <- 
+  claim_sla_x_ready %>%
+  group_by(
+            YYYY_mm_register_date, 
+            status_sla_complete_doc_to_payment_new) %>% 
+  summarise(
+            count_status_sla_complete_doc_to_payment_new = 
+            sum(meet_sla_complete_doc_to_payment_new)+
+            sum(below_sla_complete_doc_to_payment_new)) %>% 
+  ungroup() %>% 
+  arrange(desc(YYYY_mm_register_date)) %>% 
+  mutate(text = glue(
+    "SLA Status: {status_sla_complete_doc_to_payment_new}
+     Register Date: {YYYY_mm_register_date}
+     Total Claim Number: {count_status_sla_complete_doc_to_payment_new}"
+  ))  
+
+```
+
+### Plotting
+```{r}
+plot_claim_sla_complete_doc_to_payment_new <- 
+  ggplot(data = claim_sla_complete_doc_to_payment_x,
+         aes( x = YYYY_mm_register_date, 
+              y = count_status_sla_complete_doc_to_payment_new, 
+              text = text)) +
+  geom_col(aes(fill = status_sla_complete_doc_to_payment_new), position = "fill", show.legend = F)+
+  labs(title = "SLA Performance - Complete Doc to Payment",
+       y = "Claim Number",
+       x = "Register Date")+
+  coord_flip()+
+  theme_iman  
+
+ggplotly(plot_claim_sla_complete_doc_to_payment_new, tooltip = "text")
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
