@@ -5,8 +5,8 @@ account: imansubarkah
 server: shinyapps.io
 hostUrl: https://api.shinyapps.io/v1
 appId: 1786932
-bundleId: 2788981
+bundleId: 2789564
 url: https://imansubarkah.shinyapps.io/capstone_project_claim_dashboard/
-when: 1581347919.61811
+when: 1581358656.55392
 asMultiple: FALSE
 asStatic: FALSE

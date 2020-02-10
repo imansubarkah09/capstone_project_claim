@@ -126,7 +126,7 @@ body <- dashboardBody(
                     width = 9,
                     title = tagList(shiny::icon("align-center"), "SLA Performance"),
                     id = "tabset2",
-                    tabPanel("Current SLA",
+                    tabPanel("Current SLA is 7 Days",
                              fluidRow(
                                  valueBoxOutput(width = 2, "claimmeetsla2"),
                                  valueBoxOutput(width = 2, "claimbelowsla2"),
@@ -212,6 +212,7 @@ body <- dashboardBody(
 
 ui <- dashboardPage(
     skin = "green",
+    title = "Claim Insurance",
     header,
     sidebar,
     body
@@ -461,24 +462,43 @@ server <- function(input, output) {
                  subtitle = "in IDR")
     })
     output$claimmeetsla3 <- renderValueBox({
-        claim <- claim %>% 
+        SLA_x <- input$sla_x #parameter input SLA ini silahkan diganti-ganti, jika ingin tahu bagaimana SLA performance jika SLA diturunkan
+        
+        claim_sla_x <- 
+            claim %>% 
             filter( register_date >= input$registerdate3[1], register_date <= input$registerdate3[2],
                     claim_type %in% c(input$claimtype3),
                     category %in% c(input$category3),
-                    region %in% c(input$region3),                    
-                    status_sla_complete_doc_to_payment == "Meet SLA")
+                    region %in% c(input$region3)) %>%
+            mutate( 
+                status_sla_complete_doc_to_payment_new = 
+                    case_when(aging_complete_doc_to_payment > SLA_x ~ "Below Expectation",
+                              TRUE ~ "Meet SLA"))
+
+                
+        claim <- claim_sla_x %>% 
+            filter(status_sla_complete_doc_to_payment_new == "Meet SLA")
         
         valueBox(value = comma(length(claim$id), accuracy = NULL),
                  subtitle = "Meet SLA"
         )
     })
     output$claimbelowsla3 <- renderValueBox({
-        claim <- claim %>% 
+        SLA_x <- input$sla_x #parameter input SLA ini silahkan diganti-ganti, jika ingin tahu bagaimana SLA performance jika SLA diturunkan
+        
+        claim_sla_x <- 
+            claim %>% 
             filter( register_date >= input$registerdate3[1], register_date <= input$registerdate3[2],
                     claim_type %in% c(input$claimtype3),
                     category %in% c(input$category3),
-                    region %in% c(input$region3),                    
-                    status_sla_complete_doc_to_payment == "Below Expectation")
+                    region %in% c(input$region3))%>%
+            mutate( 
+                status_sla_complete_doc_to_payment_new = 
+                    case_when(aging_complete_doc_to_payment > SLA_x ~ "Below Expectation",
+                              TRUE ~ "Meet SLA"))
+        
+        claim <- claim_sla_x %>% 
+            filter(status_sla_complete_doc_to_payment_new == "Below Expectation")
         
         valueBox(value = comma(length(claim$id), accuracy = NULL),
                  subtitle = "Below SLA"
@@ -496,7 +516,7 @@ server <- function(input, output) {
                     claim_type %in% c(input$claimtype3),
                     category %in% c(input$category3),
                     region %in% c(input$region3)) %>% 
-            filter(claim_status == "Paid", register_date >= "2018-07-01") %>%
+            filter(claim_status == "Paid") %>%
             mutate( 
                 status_sla_complete_doc_to_payment_new = 
                     case_when(aging_complete_doc_to_payment > SLA_x ~ "Below Expectation",
@@ -547,7 +567,6 @@ server <- function(input, output) {
             scale_y_continuous(breaks = breaks_values,
                                labels = abs(breaks_values))+
             theme_minimal() +
-            ggtitle("SLA Performance") +
             labs(y = "SLA Status",
                  x = "Year & Month of Register Date")
         
