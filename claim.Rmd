@@ -55,9 +55,9 @@ Read data from sql server (local) using RODBC library
 ```{r}
 #local_conn = odbcConnect("local")
 #claim_database <- sqlQuery(local_conn,"SELECT * from lbb_algoritma.dbo.view_claim")
-#write.csv(claim_database, "data/claim.csv", sep = "|", row.names = FALSE, quote = FALSE)
+#write.csv(claim_database, "claim_dashboard/data/claim.csv", sep = "|", row.names = FALSE, quote = FALSE)
 
-claim <- read_csv("data/claim.csv", quote = "|")
+claim <- read_csv("claim_dashboard/data/claim.csv", quote = "|")
 ```
 
 Check if data loaded successfuly and assigned to object
@@ -338,13 +338,34 @@ claim_sla_complete_doc_to_payment_x <-
     "SLA Status: {status_sla_complete_doc_to_payment_new}
      Register Date: {YYYY_mm_register_date}
      Claim Number: {count_status_sla_complete_doc_to_payment_new}"
-  ))  
+  ))
+
+claim_sla_complete_doc_to_payment_x
 ```
 
 
 ### Ploting
 ```{r}
+breaks_values <- pretty(claim_sla_complete_doc_to_payment_x$count_status)
 
+plot_claim_sla_complete_doc_to_payment_x <- ggplot(data = claim_sla_complete_doc_to_payment_x, 
+                                  aes(x = YYYY_mm_register_date, 
+                                      y = count_status, 
+                                      fill = status_sla_complete_doc_to_payment_new))+
+  geom_hline(yintercept = 0)+
+  geom_bar(stat = "identity")+
+  geom_point(aes(text = text)) +
+  coord_flip()+
+  scale_y_continuous(breaks = breaks_values,
+                     labels = abs(breaks_values))+
+  theme_minimal() +
+  ggtitle("SLA Performance") +
+  labs(y = "SLA Status",
+       x = "Year & Month of Register Date")
+
+ggplotly(plot_claim_sla_complete_doc_to_payment_x, tooltip = "text") %>% 
+  config(displaylogo = F) %>% 
+  layout(showlegend = F)
 ```
 
 
