@@ -51,8 +51,8 @@ sidebar <- dashboardSidebar(
     width = 300,
     sidebarMenu(
         menuItem("Year on Year", tabName = "yearonyears", icon = icon("signal")),
-        menuItem("Claim Profile", tabName = "claimprofiles", icon = icon("cog")),
-        menuItem("Spreading", tabName = "spreading", icon = icon("globe")),
+        #menuItem("Claim Profile", tabName = "claimprofiles", icon = icon("cog")),
+        #menuItem("Spreading", tabName = "spreading", icon = icon("globe")),
         menuItem("SLA Performance", tabName = "slaperformances", icon = icon("align-center")),
         menuItem("What If Analysis", tabName = "whatifanalysis", icon = icon("question"))
     )
