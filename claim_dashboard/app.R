@@ -211,7 +211,7 @@ body <- dashboardBody(
                                 selected = c(unique(claim$region)))                    
                 )            
         ),
-        tabItem(tabName = "whatifanalysis",
+        tabItem(tabName = "whatifanalysis", 
                 height = 20,
                 tabBox(
                     width = 9,
